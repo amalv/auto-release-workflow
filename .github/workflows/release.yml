@@ -58,4 +58,4 @@ jobs:
       run: |
         version=$(jq -r .version package.json)
         tag=v$version
-        gh release upload $tag ./path/to/assets/*
+        gh release upload $tag ./docs/*.md
