@@ -50,7 +50,15 @@ jobs:
         release_body="Automated release $version"
         gh release create $tag -t "$release_name" -n "$release_body"
 
-    - name: Upload assets
+    - name: Remove auto-generated release assets
+      if: steps.release_type.outputs.release_type != 'none'
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        release_id=$(gh release view $tag --json id --jq .id)
+        gh api repos/:owner/:repo/releases/$release_id/assets -X DELETE
+
+    - name: Upload docs
       if: steps.release_type.outputs.release_type != 'none'
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
