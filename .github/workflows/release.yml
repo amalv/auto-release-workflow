@@ -23,23 +23,22 @@ jobs:
       run: |
         commit_message=$(git log -1 --pretty=%B)
         if [[ "$commit_message" == *"release:major"* ]]; then
-          echo "::set-output name=release_type::major"
+          echo "release_type=major" >> $GITHUB_ENV
         elif [[ "$commit_message" == *"release:minor"* ]]; then
-          echo "::set-output name=release_type::minor"
+          echo "release_type=minor" >> $GITHUB_ENV
         elif [[ "$commit_message" == *"release:patch"* ]]; then
-          echo "::set-output name=release_type::patch"
+          echo "release_type=patch" >> $GITHUB_ENV
         else
-          echo "::set-output name=release_type::none"
+          echo "release_type=none" >> $GITHUB_ENV
         fi
 
     - name: Update package.json version
-      if: steps.release_type.outputs.release_type != 'none'
+      if: env.release_type != 'none'
       run: |
-        release_type=${{ steps.release_type.outputs.release_type }}
         npm version $release_type --no-git-tag-version
 
     - name: Create GitHub Release
-      if: steps.release_type.outputs.release_type != 'none'
+      if: env.release_type != 'none'
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
@@ -50,32 +49,12 @@ jobs:
         release_body="Automated release $version"
         gh release create $tag -t "$release_name" -n "$release_body"
 
-    - name: Get release ID
-      if: steps.release_type.outputs.release_type != 'none'
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      id: get_release_id
-      run: |
-        release_id=$(gh release view $tag --json id --jq .id)
-        echo "::set-output name=release_id::$release_id"
-      
-    - name: Remove auto-generated release assets
-      if: steps.release_type.outputs.release_type != 'none'
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        release_id=${{ steps.get_release_id.outputs.release_id }}
-        assets=$(gh api repos/:owner/:repo/releases/$release_id/assets --jq '.[].id')
-        for asset_id in $assets; do
-          gh api repos/:owner/:repo/releases/assets/$asset_id -X DELETE
-        done
-
     - name: Upload docs
-      if: steps.release_type.outputs.release_type != 'none'
+      if: env.release_type != 'none'
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         version=$(jq -r .version package.json)
         commit_hash=$(git rev-parse --short HEAD)
         tag=v$version-$commit_hash
-        gh release upload $tag ./docs/*.md
+        gh release upload $tag ./docs/*.md --clobber
