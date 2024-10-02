@@ -1,0 +1,61 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '**.yml'
+      - '**.md'
+      - '**/package.json'
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Determine release type
+      id: release_type
+      run: |
+        commit_message=$(git log -1 --pretty=%B)
+        if [[ "$commit_message" == *"release:major"* ]]; then
+          echo "::set-output name=release_type::major"
+        elif [[ "$commit_message" == *"release:minor"* ]]; then
+          echo "::set-output name=release_type::minor"
+        elif [[ "$commit_message" == *"release:patch"* ]]; then
+          echo "::set-output name=release_type::patch"
+        fi
+
+    - name: Update package.json version
+      run: |
+        release_type=${{ steps.release_type.outputs.release_type }}
+        if [ -z "$release_type" ]; then
+          echo "No release type found. Exiting."
+          exit 0
+        fi
+        npm version $release_type --no-git-tag-version
+
+    - name: Create GitHub Release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        version=$(jq -r .version package.json)
+        tag=v$version
+        release_name="Release $version"
+        release_body="Automated release $version"
+        gh release create $tag -t "$release_name" -n "$release_body"
+
+    - name: Upload assets
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        version=$(jq -r .version package.json)
+        tag=v$version
+        gh release upload $tag ./path/to/assets/*
